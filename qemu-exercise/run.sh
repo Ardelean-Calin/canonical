@@ -3,9 +3,10 @@ set -e
 
 KERNEL_VERSION="linux-6.1.74"
 BUSYBOX_VERSION="busybox-1_36_1"
+SYSLINUX_VERSION=6.03
 
 ####### Step 0: Check requirements
-sudo apt update && sudo apt install -y qemu-system-x86 git wget tar fakeroot build-essential ncurses-dev xz-utils libssl-dev bc flex libelf-dev bison grub-common xorriso
+sudo apt update && sudo apt install -y qemu-system-x86 git wget tar fakeroot build-essential ncurses-dev xz-utils libssl-dev bc flex libelf-dev bison xorriso
 
 # ####### Step 1: Download and extract the Linux kernel (I chose LTS)
 if [[ ! -f "${KERNEL_VERSION}.tar.xz" ]]; then
@@ -58,17 +59,31 @@ while getopts ':b' opt; do
   case "$opt" in
     b)
       echo -e "${GREEN}Creating Bootable ISO...${NC}"
-      mkdir -p iso/boot/grub
-      cp "$KERNEL_VERSION/arch/x86_64/boot/bzImage" iso/boot/
-      cp "$KERNEL_VERSION/${BUSYBOX_VERSION}/initramfs.cpio.gz" iso/boot/
-      if [[ -d /sys/firmware/efi ]]; then
-        echo -e "${GREEN}Detected EFI system.${NC}"
-        cp config/grub_efi.cfg iso/boot/grub/grub.cfg
-      else
-        echo -e "${GREEN}Detected BIOS system.${NC}"
-        cp config/grub_bios.cfg iso/boot/grub/grub.cfg
-      fi
-      grub-mkrescue -o calinos.iso iso/
+      # Download the bootloader
+      wget -O syslinux.tar.xz http://kernel.org/pub/linux/utils/boot/syslinux/syslinux-${SYSLINUX_VERSION}.tar.xz
+      tar -xvf syslinux.tar.xz
+      rm syslinux.tar.xz
+
+      # Install the bootloader
+      mkdir -p iso/
+      cp "$KERNEL_VERSION/arch/x86_64/boot/bzImage" iso/kernel.gz
+      cp "$KERNEL_VERSION/${BUSYBOX_VERSION}/initramfs.cpio.gz" iso/rootfs.gz
+      cp ./syslinux-${SYSLINUX_VERSION}/bios/core/isolinux.bin iso/
+      cp ./syslinux-${SYSLINUX_VERSION}/bios/com32/elflink/ldlinux/ldlinux.c32 iso/
+      echo 'default kernel.gz initrd=rootfs.gz' > iso/isolinux.cfg
+
+      # Create live ISO
+      cd iso
+      xorriso \
+        -as mkisofs \
+        -o ../calinos.iso \
+        -b isolinux.bin \
+        -c boot.cat \
+        -no-emul-boot \
+        -boot-load-size 4 \
+        -boot-info-table \
+        ./
+      cd -
       echo -e "${GREEN}Done! Created .iso image calinos.iso${NC}"
       ;;
   esac
