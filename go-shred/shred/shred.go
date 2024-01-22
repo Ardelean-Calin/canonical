@@ -65,7 +65,7 @@ func Shred(path string) error {
 	// Create a shreder s that uses the Linux /dev/urandom special file
 	s, err := NewRandomShredder()
 	if err != nil {
-		panic(err)
+		return err
 	}
 	defer s.Close()
 
@@ -79,7 +79,7 @@ func Shred(path string) error {
 	log.Println("Done shredding. Removing file.")
 	err = os.Remove(path)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	return nil
